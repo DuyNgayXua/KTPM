@@ -6,6 +6,7 @@ import { Dashboard, People, AccountCircle, ShoppingCart, Receipt, BarChart, Sett
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
 import { Visibility } from "@mui/icons-material";
+import axios from "axios";
 
 const drawerWidth = 260;
 
@@ -18,18 +19,18 @@ const theme = createTheme({
   },
 });
 
-const initialCustomers = [
-  {id:1, name: "Nguyễn Văn A", phone: "0123456789", email: "anc@gmail.com", address: "123 Đường ABC, Quận XYZ, TP HCM", orderspurchased : 5 , totalAmount: 5000000},
-  {id:2, name: "Nguyễn Văn B", phone: "0123456789", email: "abc@gmail.com", address: "123 Đường XYZ, Quận ABC, TP HCM", orderspurchased : 10 , totalAmount: 10000000},
-];
-const mockOrders = [
-  { id: 101, customerId: 1, product: "iPhone 14", quantity: 1, total: 20000000 },
-  { id: 102, customerId: 1, product: "Samsung S23", quantity: 2, total: 30000000 },
-  { id: 103, customerId: 2, product: "MacBook Pro", quantity: 1, total: 45000000 },
-];
+// const initialCustomers = [
+//   {id:1, name: "Nguyễn Văn A", phone: "0123456789", email: "anc@gmail.com", address: "123 Đường ABC, Quận XYZ, TP HCM", orderspurchased : 5 , totalAmount: 5000000},
+//   {id:2, name: "Nguyễn Văn B", phone: "0123456789", email: "abc@gmail.com", address: "123 Đường XYZ, Quận ABC, TP HCM", orderspurchased : 10 , totalAmount: 10000000},
+// ];
+// const mockOrders = [
+//   { id: 101, customerId: 1, product: "iPhone 14", quantity: 1, total: 20000000 },
+//   { id: 102, customerId: 1, product: "Samsung S23", quantity: 2, total: 30000000 },
+//   { id: 103, customerId: 2, product: "MacBook Pro", quantity: 1, total: 45000000 },
+// ];
 
 export default function Customer() {
-  const [Customers, setCustomers] = useState(initialCustomers);
+  const [Customers, setCustomers] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
@@ -39,16 +40,24 @@ export default function Customer() {
   const [searchTerm, setSearchTerm] = useState("");
   const [currentTime, setCurrentTime] = useState(new Date());
   const [viewOpen, setViewOpen] = useState(false);
-const [selectedCustomerDetails, setSelectedCustomerDetails] = useState(null);
-const [orders, setOrders] = useState([]);
+  const [selectedCustomerDetails, setSelectedCustomerDetails] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [orderOfCustomer, setOrderOfCustomer] = useState([]);
   const navigate = useNavigate();
   useEffect(() => {
+    axios.get("http://localhost:5000/api/customers")
+      .then(response => setCustomers(response.data))
+      .catch(error => console.error("Lỗi khi lấy danh sách khách hàng:", error));
+      console.log(Customers);
+    axios.get("http://localhost:5000/api/orders")
+      .then(response => setOrders(response.data))
+      .catch(error => console.error("Lỗi khi lấy danh sách đơn hàng:", error));
+      console.log(orders);
   const timer = setInterval(() => {
     setCurrentTime(new Date());
   }, 1000);
   return () => clearInterval(timer);
 }, []);
-
 
   const handleDeleteConfirm = (Customer) => {
   setCustomerToDelete(Customer);
@@ -56,13 +65,17 @@ const [orders, setOrders] = useState([]);
 };
 
 const handleDeleteCustomer = () => {
-  setCustomers(Customers.filter(acc => acc.id !== CustomerToDelete.id));
-  setDeleteOpen(false);
-  setCustomerToDelete(null);
+  axios.delete(`http://localhost:5000/api/customers/${CustomerToDelete.id}`)
+      .then(() => {
+        setCustomers(Customers.filter(c => c.id !== CustomerToDelete.id));
+        setDeleteOpen(false);
+        setCustomerToDelete(null);
+      })
+      .catch(error => console.error("Lỗi khi xóa khách hàng:", error));
 };
 const handleViewCustomer = (Customer) => {
   setSelectedCustomerDetails(Customer);
-  setOrders(mockOrders.filter(order => order.customerId === Customer.id)); // Lọc đơn hàng theo khách hàng
+  setOrderOfCustomer(orders.filter(order => order.customerId === Customer.id));
   setViewOpen(true);
 };
 
@@ -80,11 +93,20 @@ const handleViewCustomer = (Customer) => {
 
   const handleSaveCustomer = () => {
     if (selectedCustomer) {
-      setCustomers(Customers.map(acc => acc.id === selectedCustomer.id ? { ...selectedCustomer } : acc));
+      axios.put(`http://localhost:5000/api/customers/${selectedCustomer.id}`, selectedCustomer)
+        .then(response => {
+          setCustomers(Customers.map(c => (c.id === selectedCustomer.id ? response.data : c)));
+          handleClose();
+        })
+        .catch(error => console.error("Lỗi khi cập nhật khách hàng:", error));
     } else {
-      setCustomers([...Customers, { id: Customers.length + 1, ...newCustomer }]);
+      axios.post("http://localhost:5000/api/customers", newCustomer)
+        .then(response => {
+          setCustomers([...Customers, response.data]);
+          handleClose();
+        })
+        .catch(error => console.error("Lỗi khi thêm khách hàng:", error));
     }
-    handleClose();
   };
   
 
@@ -157,7 +179,6 @@ const handleViewCustomer = (Customer) => {
     onChange={(e) => setSearchTerm(e.target.value)}
   />
 </Box>
-
           <TableContainer component={Paper} sx={{ borderRadius: 2, boxShadow: 3, mt: 3, backgroundColor: "#f0f0f0" }}>
             <Table>
               <TableHead sx={{ backgroundColor: "#a7adad" }}>
@@ -175,15 +196,16 @@ const handleViewCustomer = (Customer) => {
   .filter(Customer => 
     Customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     Customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    Customer.phone.toLowerCase().includes(searchTerm.toLowerCase())
+    Customer.sdt.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    Customer.diachi.toLowerCase().includes(searchTerm.toLowerCase())
   )
   .map((Customer) => (
     <TableRow key={Customer.id} hover>
       <TableCell>{Customer.id}</TableCell>
       <TableCell>{Customer.name}</TableCell>
-      <TableCell>{Customer.phone}</TableCell>
+      <TableCell>{Customer.sdt}</TableCell>
       <TableCell>{Customer.email}</TableCell>
-      <TableCell>{Customer.address}</TableCell>
+      <TableCell>{Customer.diachi}</TableCell>
       <TableCell>
       <IconButton color="info" onClick={() => handleViewCustomer(Customer)}>
       <Visibility />
@@ -197,7 +219,6 @@ const handleViewCustomer = (Customer) => {
       </TableCell>
     </TableRow>
 ))}
-
                 <TableRow>
                   <TableCell colSpan={5} align="center">
                     <IconButton color="success" onClick={() => setAddOpen(true)}><AddCircle /></IconButton>
@@ -227,11 +248,11 @@ const handleViewCustomer = (Customer) => {
         margin="dense" 
         label="SDT" 
         fullWidth 
-        value={selectedCustomer ? selectedCustomer.phone : newCustomer.phone} 
+        value={selectedCustomer ? selectedCustomer.sdt : newCustomer.sdt} 
         onChange={(e) => {
           selectedCustomer 
-            ? setSelectedCustomer({ ...selectedCustomer, phone: e.target.value }) 
-            : setNewCustomer({ ...newCustomer, phone: e.target.value });
+            ? setSelectedCustomer({ ...selectedCustomer, sdt: e.target.value }) 
+            : setNewCustomer({ ...newCustomer, sdt: e.target.value });
         }} 
       />
       <TextField 
@@ -249,11 +270,11 @@ const handleViewCustomer = (Customer) => {
         margin="dense" 
         label="Address" 
         fullWidth 
-        value={selectedCustomer ? selectedCustomer.address : newCustomer.address} 
+        value={selectedCustomer ? selectedCustomer.diachi : newCustomer.diachi} 
         onChange={(e) => {
           selectedCustomer 
-            ? setSelectedCustomer({ ...selectedCustomer, address: e.target.value }) 
-            : setNewCustomer({ ...newCustomer, address: e.target.value });
+            ? setSelectedCustomer({ ...selectedCustomer, diachi: e.target.value }) 
+            : setNewCustomer({ ...newCustomer, diachi: e.target.value });
         }} 
       />
 

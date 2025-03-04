@@ -1,7 +1,10 @@
 const express = require("express");
 const dotenv = require("dotenv");
 const cors = require("cors");
-const { connectDB, Customer, Product, Order } = require("./models"); // Import connectDB và models
+const { connectDB } = require("./models");
+const Customer = require("./models/Customer");
+const Product = require("./models/Product");
+const Order = require("./models/Order");
 
 dotenv.config();
 
@@ -18,9 +21,49 @@ connectDB();
 app.post("/api/customers", async (req, res) => {
   try {
     const { name, email, sdt, diachi } = req.body;
-    const newCus = new User({ name, email, sdt, diachi });
+
+    if (!name || !email || !sdt || !diachi) {
+      return res.status(400).json({ error: "Vui lòng nhập đầy đủ thông tin!" });
+    }
+
+    // Lấy ID lớn nhất và chuyển thành số
+    const lastCustomer = await Customer.findOne().sort({ id: -1 });
+    const newId = lastCustomer ? Number(lastCustomer.id) + 1 : 1; // Chuyển id thành số trước khi tăng
+
+    // Tạo khách hàng mới
+    const newCus = new Customer({ id: newId.toString(), name, email, sdt, diachi });
+
     await newCus.save();
+
     res.status(201).json({ message: "Customer created successfully!", cus: newCus });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Route cập nhật thông tin customer
+app.put("/api/customers/:id", async (req, res) => {
+  try {
+    const { name, email, sdt, diachi } = req.body;
+    const { id } = req.params;
+
+    const customer = await Customer
+      .findOneAndUpdate({
+        id
+      }, {
+        name,
+        email,
+        sdt,
+        diachi
+      }, {
+        new: true
+      });
+      
+    if (!customer) {
+      return res.status(404).json({ message: "Không tìm thấy khách hàng." });
+    }
+
+    res.status(200).json({ message: "Customer updated successfully!", cus: customer });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -30,11 +73,17 @@ app.post("/api/customers", async (req, res) => {
 app.get("/api/customers", async (req, res) => {
   try {
     const customers = await Customer.find();
-    res.json(customers);
+    
+    if (!customers || customers.length === 0) {
+      return res.status(404).json({ message: "Không có khách hàng nào." });
+    }
+    res.status(200).json(customers);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Lỗi khi lấy danh sách khách hàng:", error);
+    res.status(500).json({ error: "Lỗi máy chủ, vui lòng thử lại sau." });
   }
 });
+
 
 // Route tạo Product
 app.post("/api/products", async (req, res) => {
